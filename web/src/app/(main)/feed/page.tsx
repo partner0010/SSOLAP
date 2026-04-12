@@ -9,6 +9,7 @@ import { useSearchParams } from 'next/navigation';
 import { useFeedStore } from '@/store/feedStore';
 import PostCard from '@/components/feed/PostCard';
 import CreatePost from '@/components/feed/CreatePost';
+import StoryBar from '@/components/story/StoryBar';
 
 // ─── 스켈레톤 로딩 ───────────────────────────────────────────────────────────
 
@@ -87,6 +88,9 @@ export default function FeedPage() {
 
   return (
     <div>
+      {/* ── 스토리 바 ──────────────────────────────────────────────── */}
+      <StoryBar />
+
       {/* ── 게시물 작성 폼 ─────────────────────────────────────────── */}
       <CreatePost />
 

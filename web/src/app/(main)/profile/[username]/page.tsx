@@ -8,7 +8,9 @@ import { useParams, useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
 import { useChatStore } from '@/store/chatStore';
+import { useStoryStore } from '@/store/storyStore';
 import PostCard from '@/components/feed/PostCard';
+import StoryViewer from '@/components/story/StoryViewer';
 import toast from 'react-hot-toast';
 import type { Post } from '@/types';
 
@@ -71,6 +73,12 @@ export default function ProfilePage() {
   const [dmLoading,      setDmLoading]      = useState(false);
 
   const isOwnProfile = me?.username === username;
+
+  // 스토리 상태
+  const { groups, openViewer } = useStoryStore();
+  const storyGroup    = groups.find((g) => g.username === username);
+  const hasStory      = !!storyGroup && storyGroup.stories.length > 0;
+  const storyGroupIdx = groups.findIndex((g) => g.username === username);
 
   // ── 프로필 + 게시물 로드 ─────────────────────────────────────────────
   useEffect(() => {
@@ -140,16 +148,31 @@ export default function ProfilePage() {
       {/* ── 프로필 헤더 ────────────────────────────────────────────── */}
       <div className="card mb-6">
         <div className="flex items-start gap-5">
-          {/* 아바타 */}
-          <div className="
-            w-20 h-20 bg-ssolap-silver/10 border border-ssolap-border
-            flex items-center justify-center text-ssolap-silver text-2xl font-black
-            flex-shrink-0
-          ">
-            {profile.avatar_url ? (
-              <img src={profile.avatar_url} alt={profile.display_name} className="w-full h-full object-cover" />
-            ) : (
-              profile.display_name[0].toUpperCase()
+          {/* 아바타 (스토리 있으면 링 표시) */}
+          <div
+            className={`flex-shrink-0 ${hasStory ? 'cursor-pointer' : ''}`}
+            onClick={hasStory && storyGroupIdx >= 0 ? () => openViewer(storyGroupIdx) : undefined}
+          >
+            <div className={`
+              w-20 h-20 bg-ssolap-silver/10
+              flex items-center justify-center text-ssolap-silver text-2xl font-black
+              overflow-hidden
+              ${hasStory
+                ? storyGroup!.has_unseen
+                  ? 'ring-2 ring-offset-2 ring-offset-ssolap-bg ring-ssolap-silver/80'
+                  : 'ring-2 ring-offset-2 ring-offset-ssolap-bg ring-ssolap-border'
+                : 'border border-ssolap-border'
+              }
+              ${hasStory ? 'hover:opacity-90 transition-opacity' : ''}
+            `}>
+              {profile.avatar_url ? (
+                <img src={profile.avatar_url} alt={profile.display_name} className="w-full h-full object-cover" />
+              ) : (
+                profile.display_name[0].toUpperCase()
+              )}
+            </div>
+            {hasStory && (
+              <p className="text-center text-[10px] text-ssolap-silver/50 mt-1">스토리</p>
             )}
           </div>
 
@@ -251,6 +274,9 @@ export default function ProfilePage() {
           </div>
         )}
       </div>
+
+      {/* 스토리 뷰어 (포털 없이 페이지 내 렌더) */}
+      <StoryViewer />
     </div>
   );
 }

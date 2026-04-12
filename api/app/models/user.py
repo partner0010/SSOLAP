@@ -106,6 +106,12 @@ class User(Base):
         cascade="all, delete-orphan",
         lazy="noload",   # 필요할 때만 로드
     )
+    stories: Mapped[list["Story"]] = relationship(
+        "Story",
+        back_populates="author",
+        cascade="all, delete-orphan",
+        lazy="noload",
+    )
 
     def __repr__(self) -> str:
         return f"<User id={self.id} username={self.username!r}>"
