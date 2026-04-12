@@ -1,0 +1,52 @@
+# Python 캐시
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.so
+
+# 가상환경
+.venv/
+venv/
+env/
+ENV/
+
+# 개발용 DB / 업로드 파일
+*.db
+*.sqlite
+*.sqlite3
+uploads/
+
+# 환경변수
+.env
+.env.*
+!.env.example
+
+# Alembic 버전 파일은 포함 (마이그레이션 필요)
+# alembic/versions/ 는 제외하지 않음
+
+# pytest / coverage
+.pytest_cache/
+htmlcov/
+.coverage
+coverage.xml
+
+# mypy / ruff
+.mypy_cache/
+.ruff_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# git
+.git/
+.gitignore
+
+# 기타
+*.log
+.DS_Store
+Thumbs.db

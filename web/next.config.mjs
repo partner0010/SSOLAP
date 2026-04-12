@@ -2,6 +2,9 @@
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Docker 프로덕션 빌드: standalone 출력 (node_modules 없이 실행 가능)
+  output: process.env.DOCKER_BUILD === 'true' ? 'standalone' : undefined,
+
   // API 프록시 — 프론트에서 /api/* 요청을 FastAPI로 전달
   async rewrites() {
     return [
