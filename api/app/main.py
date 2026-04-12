@@ -14,7 +14,10 @@ from app.core.config import settings
 from app.core.database import create_tables
 
 # ─── 라우터 임포트 ────────────────────────────────────────────────────────────
-from app.routers import auth
+from app.routers import auth, posts, users
+
+# ─── 모델 임포트 (create_tables가 모든 모델을 인식하도록) ─────────────────────
+from app.models import user, post, follow  # noqa: F401
 
 # ─── 시작/종료 이벤트 ──────────────────────────────────────────────────────────
 @asynccontextmanager
@@ -69,12 +72,12 @@ app.add_middleware(
 
 # ─── 라우터 등록 ──────────────────────────────────────────────────────────────
 app.include_router(auth.router)
+app.include_router(posts.router)
+app.include_router(users.router)
 
 # 추후 Phase별로 추가 예정:
-# app.include_router(posts.router)
 # app.include_router(chat.router)
 # app.include_router(points.router)
-# app.include_router(users.router)
 
 # ─── 정적 파일 서빙 (업로드 이미지/영상) ─────────────────────────────────────
 upload_path = Path(settings.UPLOAD_DIR)
