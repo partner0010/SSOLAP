@@ -7,6 +7,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
+import NotificationBell from './NotificationBell';
 
 export default function Header({ title }: { title?: string }) {
   const [query, setQuery] = useState('');
@@ -78,13 +79,8 @@ export default function Header({ title }: { title?: string }) {
           </Link>
         )}
 
-        {/* 알림 아이콘 (추후 Phase에서 구현) */}
-        <button className="text-ssolap-muted hover:text-ssolap-silver transition-colors relative">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
-            <path d="M13.73 21a2 2 0 0 1-3.46 0" />
-          </svg>
-        </button>
+        {/* 알림 벨 */}
+        <NotificationBell />
       </div>
     </header>
   );

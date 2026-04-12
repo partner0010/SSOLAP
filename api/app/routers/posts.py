@@ -23,6 +23,7 @@ from app.models.user import User
 from app.models.post import Post, PostMedia, PostLike, Comment
 from app.models.follow import Follow
 from app.services.point_service import award_points
+from app.services.notification_service import notify_like, notify_comment, notify_comment_reply
 from app.schemas.post import (
     CreatePostRequest,
     UpdatePostRequest,
@@ -349,6 +350,8 @@ async def toggle_like(
         db.add(PostLike(user_id=current_user.id, post_id=post_id))
         post.like_count += 1
         liked = True
+        # 좋아요 알림 (게시물 작성자에게)
+        await notify_like(db, actor=current_user, post_author_id=post.author_id, post_id=post_id)
 
     await db.commit()
     return {"liked": liked, "like_count": post.like_count}
@@ -434,6 +437,22 @@ async def create_comment(
         description="댓글 작성 보상",
         ref_id=comment.id,
     )
+
+    # 댓글/대댓글 알림
+    if body.parent_id and parent:
+        # 대댓글: 부모 댓글 작성자에게
+        await notify_comment_reply(
+            db, actor=current_user,
+            parent_comment_author_id=parent.author_id,
+            post_id=post_id, comment_id=comment.id,
+        )
+    else:
+        # 댓글: 게시물 작성자에게
+        await notify_comment(
+            db, actor=current_user,
+            post_author_id=post.author_id,
+            post_id=post_id, comment_id=comment.id,
+        )
 
     # author 로드
     await db.refresh(comment)

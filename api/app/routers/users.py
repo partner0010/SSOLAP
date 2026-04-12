@@ -18,6 +18,7 @@ from app.core.database import get_db
 from app.models.user import User
 from app.models.follow import Follow
 from app.models.post import Post, PostLike
+from app.services.notification_service import notify_follow
 from app.schemas.user import UserResponse, UpdateProfileRequest
 from app.schemas.post import FeedResponse, PostResponse, AuthorBrief, MediaResponse
 from app.routers.deps import get_current_user, get_optional_user
@@ -142,6 +143,8 @@ async def toggle_follow(
         target.follower_count  += 1
         current_user.following_count += 1
         followed = True
+        # 팔로우 알림
+        await notify_follow(db, actor=current_user, target_user_id=target.id)
 
     await db.commit()
     return {
