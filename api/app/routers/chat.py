@@ -32,6 +32,7 @@ from app.routers.deps import get_current_user, get_optional_user
 from app.schemas.chat import (
     CreateRoomRequest,
     RoomResponse,
+    DmPartnerBrief,
     JoinRoomRequest,
     MessageResponse,
     MessageHistoryResponse,
@@ -105,6 +106,26 @@ async def get_my_rooms(
             .order_by(desc(ChatMessage.created_at))
             .limit(1)
         )
+
+        # DM 방이면 상대방 정보 조회
+        dm_partner: Optional[DmPartnerBrief] = None
+        if room.room_type == "direct":
+            partner_user = await db.scalar(
+                select(User)
+                .join(ChatMember, ChatMember.user_id == User.id)
+                .where(
+                    ChatMember.room_id == room.id,
+                    User.id != current_user.id,
+                )
+            )
+            if partner_user:
+                dm_partner = DmPartnerBrief(
+                    id=partner_user.id,
+                    username=partner_user.username,
+                    display_name=partner_user.display_name,
+                    avatar_url=partner_user.avatar_url,
+                )
+
         result.append(RoomResponse(
             id=room.id,
             name=room.name,
@@ -118,6 +139,7 @@ async def get_my_rooms(
             is_member=True,
             online_count=manager.room_online_count(room.id),
             last_message=_to_msg_response(last_msg) if last_msg else None,
+            dm_partner=dm_partner,
             created_at=room.created_at,
         ))
     return result
@@ -196,6 +218,111 @@ async def create_room(
         entry_fee=room.entry_fee, max_members=room.max_members,
         member_count=room.member_count, is_public=room.is_public,
         is_member=True, online_count=0, created_at=room.created_at,
+    )
+
+
+# ─── DM (1:1 다이렉트 메시지) ────────────────────────────────────────────────
+
+@router.post("/dm/{username}", response_model=RoomResponse, summary="DM 시작 / 기존 방 반환")
+async def get_or_create_dm(
+    username: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> RoomResponse:
+    """
+    상대방 username으로 DM 방을 가져오거나 새로 생성합니다.
+    이미 1:1 direct 방이 존재하면 기존 방을 반환합니다.
+    """
+    # 상대방 조회
+    target = await db.scalar(select(User).where(User.username == username))
+    if not target:
+        raise HTTPException(status_code=404, detail="유저를 찾을 수 없습니다")
+    if target.id == current_user.id:
+        raise HTTPException(status_code=400, detail="자기 자신에게 DM을 보낼 수 없습니다")
+
+    # 기존 DM 방 탐색: 두 유저가 모두 멤버인 direct 방
+    my_dm_rooms = (await db.scalars(
+        select(ChatMember.room_id)
+        .join(ChatRoom, ChatRoom.id == ChatMember.room_id)
+        .where(
+            ChatMember.user_id == current_user.id,
+            ChatRoom.room_type == "direct",
+        )
+    )).all()
+
+    if my_dm_rooms:
+        existing = await db.scalar(
+            select(ChatRoom)
+            .where(
+                ChatRoom.id.in_(list(my_dm_rooms)),
+                ChatRoom.id.in_(
+                    select(ChatMember.room_id).where(ChatMember.user_id == target.id)
+                ),
+            )
+        )
+        if existing:
+            last_msg = await db.scalar(
+                select(ChatMessage)
+                .options(selectinload(ChatMessage.sender))
+                .where(ChatMessage.room_id == existing.id)
+                .order_by(desc(ChatMessage.created_at))
+                .limit(1)
+            )
+            return RoomResponse(
+                id=existing.id, name=existing.name,
+                description=existing.description,
+                room_type=existing.room_type,
+                entry_type=existing.entry_type,
+                entry_fee=existing.entry_fee,
+                max_members=existing.max_members,
+                member_count=existing.member_count,
+                is_public=existing.is_public,
+                is_member=True,
+                online_count=manager.room_online_count(existing.id),
+                last_message=_to_msg_response(last_msg) if last_msg else None,
+                dm_partner=DmPartnerBrief(
+                    id=target.id,
+                    username=target.username,
+                    display_name=target.display_name,
+                    avatar_url=target.avatar_url,
+                ),
+                created_at=existing.created_at,
+            )
+
+    # 새 DM 방 생성
+    room = ChatRoom(
+        owner_id=current_user.id,
+        name=f"DM:{current_user.username}:{target.username}",
+        room_type="direct",
+        entry_type="invite",
+        is_public=False,
+        max_members=2,
+        member_count=2,
+    )
+    db.add(room)
+    await db.flush()
+    db.add(ChatMember(room_id=room.id, user_id=current_user.id, role="owner"))
+    db.add(ChatMember(room_id=room.id, user_id=target.id,       role="member"))
+    await db.commit()
+    await db.refresh(room)
+
+    return RoomResponse(
+        id=room.id, name=room.name,
+        description=room.description,
+        room_type=room.room_type,
+        entry_type=room.entry_type,
+        entry_fee=room.entry_fee,
+        max_members=room.max_members,
+        member_count=room.member_count,
+        is_public=room.is_public,
+        is_member=True, online_count=0,
+        dm_partner=DmPartnerBrief(
+            id=target.id,
+            username=target.username,
+            display_name=target.display_name,
+            avatar_url=target.avatar_url,
+        ),
+        created_at=room.created_at,
     )
 
 

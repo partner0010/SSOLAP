@@ -117,6 +117,11 @@ function CreateRoomModal({ onClose }: { onClose: () => void }) {
 function RoomItem({
   room, isActive, onClick,
 }: { room: ChatRoom; isActive: boolean; onClick: () => void }) {
+  const isDm      = room.room_type === 'direct';
+  const partner   = room.dm_partner;
+  const roomLabel = isDm && partner ? partner.display_name : room.name;
+  const initials  = roomLabel[0]?.toUpperCase() ?? '?';
+
   return (
     <button onClick={onClick}
       className={`w-full flex items-start gap-3 px-4 py-3 text-left transition-all
@@ -124,20 +129,34 @@ function RoomItem({
           ? 'bg-ssolap-silver/10 border-l-2 border-ssolap-silver'
           : 'hover:bg-white/3 border-l-2 border-transparent'
         }`}>
-      {/* 방 아이콘 */}
-      <div className="w-9 h-9 bg-ssolap-silver/10 border border-ssolap-border flex items-center justify-center text-ssolap-silver text-xs font-bold flex-shrink-0">
-        {room.name[0].toUpperCase()}
+      {/* 아이콘 — DM은 상대방 아바타, 채널/그룹은 이니셜 */}
+      <div className="w-9 h-9 bg-ssolap-silver/10 border border-ssolap-border flex items-center justify-center text-ssolap-silver text-xs font-bold flex-shrink-0 overflow-hidden relative">
+        {isDm && partner?.avatar_url
+          // eslint-disable-next-line @next/next/no-img-element
+          ? <img src={partner.avatar_url} alt="" className="w-full h-full object-cover" />
+          : initials
+        }
+        {/* DM 배지 */}
+        {isDm && (
+          <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-ssolap-silver/40 flex items-center justify-center text-[7px] leading-none">◧</span>
+        )}
       </div>
+
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between gap-2">
-          <span className="text-ssolap-silver text-xs font-semibold truncate">{room.name}</span>
+          <span className="text-ssolap-silver text-xs font-semibold truncate">
+            {roomLabel}
+            {isDm && partner && (
+              <span className="ml-1 text-ssolap-muted/50 text-[10px] font-normal">@{partner.username}</span>
+            )}
+          </span>
           {room.online_count > 0 && (
             <span className="text-[9px] text-green-400/70 flex-shrink-0">● {room.online_count}</span>
           )}
         </div>
         {room.last_message ? (
           <p className="text-ssolap-muted text-[11px] truncate mt-0.5">
-            {room.last_message.sender?.display_name}: {room.last_message.content}
+            {isDm ? room.last_message.content : `${room.last_message.sender?.display_name}: ${room.last_message.content}`}
           </p>
         ) : (
           <p className="text-ssolap-muted/40 text-[11px] mt-0.5">메시지 없음</p>
@@ -202,9 +221,10 @@ function MessageBubble({ msg, isMine }: { msg: ChatMessage; isMine: boolean }) {
 function ChatWindow({ roomId }: { roomId: number }) {
   const { user } = useAuthStore();
   const {
-    messages, messagesLoading, hasPrevMessages, typingUsers,
+    rooms, messages, messagesLoading, hasPrevMessages, typingUsers,
     fetchMessages, appendMessage,
   } = useChatStore();
+  const room = rooms.find((r) => r.id === roomId);
 
   const [input,     setInput]     = useState('');
   const [secretTo,  setSecretTo]  = useState<number | null>(null);
@@ -245,10 +265,37 @@ function ChatWindow({ roomId }: { roomId: number }) {
     <div className="flex flex-col h-full">
       {/* ── 헤더 ───────────────────────────────────────────────── */}
       <div className="flex items-center gap-3 px-5 py-3 border-b border-ssolap-border flex-shrink-0">
-        <div className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400' : isConnecting ? 'bg-yellow-400 animate-pulse' : 'bg-ssolap-muted/40'}`} />
-        <span className="text-ssolap-silver text-xs font-semibold tracking-wide">
-          {isConnected ? '연결됨' : isConnecting ? '연결 중...' : '연결 끊김'}
-        </span>
+        {/* 방 이름 / DM 상대 */}
+        {room && (
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            {room.room_type === 'direct' && room.dm_partner?.avatar_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={room.dm_partner.avatar_url} alt="" className="w-7 h-7 object-cover border border-ssolap-border flex-shrink-0" />
+            ) : (
+              <div className="w-7 h-7 bg-ssolap-silver/10 border border-ssolap-border flex items-center justify-center text-ssolap-silver text-[10px] font-bold flex-shrink-0">
+                {room.room_type === 'direct' && room.dm_partner
+                  ? room.dm_partner.display_name[0]
+                  : room.name[0]}
+              </div>
+            )}
+            <div className="min-w-0">
+              <p className="text-ssolap-silver text-xs font-semibold truncate">
+                {room.room_type === 'direct' && room.dm_partner
+                  ? room.dm_partner.display_name
+                  : room.name}
+              </p>
+              {room.room_type === 'direct' && room.dm_partner && (
+                <p className="text-ssolap-muted/50 text-[10px]">@{room.dm_partner.username}</p>
+              )}
+            </div>
+          </div>
+        )}
+        <div className="flex items-center gap-2 ml-auto flex-shrink-0">
+          <div className={`w-1.5 h-1.5 rounded-full ${isConnected ? 'bg-green-400' : isConnecting ? 'bg-yellow-400 animate-pulse' : 'bg-ssolap-muted/40'}`} />
+          <span className="text-ssolap-muted text-[10px]">
+            {isConnected ? '연결됨' : isConnecting ? '연결 중...' : '연결 끊김'}
+          </span>
+        </div>
       </div>
 
       {/* ── 메시지 영역 ────────────────────────────────────────── */}

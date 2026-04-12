@@ -27,6 +27,13 @@ export interface ChatMessage {
   _pending?:            boolean;
 }
 
+export interface DmPartner {
+  id:           number;
+  username:     string;
+  display_name: string;
+  avatar_url?:  string | null;
+}
+
 export interface ChatRoom {
   id:           number;
   name:         string;
@@ -40,6 +47,7 @@ export interface ChatRoom {
   is_member:    boolean;
   online_count: number;
   last_message?: ChatMessage;
+  dm_partner?:  DmPartner | null;   // direct 방 전용
   created_at:   string;
 }
 
@@ -68,6 +76,7 @@ interface ChatState {
   fetchMyRooms:     () => Promise<void>;
   fetchExploreRooms: () => Promise<void>;
   createRoom:       (data: CreateRoomData) => Promise<ChatRoom>;
+  startDm:          (username: string) => Promise<ChatRoom>;
   joinRoom:         (roomId: number, password?: string) => Promise<void>;
   leaveRoom:        (roomId: number) => Promise<void>;
   fetchMessages:    (roomId: number, beforeId?: number) => Promise<void>;
@@ -121,6 +130,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
   createRoom: async (data) => {
     const room = await api.post<ChatRoom>('/chat/rooms', data);
     set((s) => ({ rooms: [room, ...s.rooms] }));
+    return room;
+  },
+
+  // ── DM 시작 (기존 방 반환 or 새 방 생성) ─────────────────────────
+  startDm: async (username) => {
+    const room = await api.post<ChatRoom>(`/chat/dm/${username}`);
+    set((s) => {
+      // 이미 목록에 있으면 업데이트, 없으면 맨 앞에 추가
+      const exists = s.rooms.some((r) => r.id === room.id);
+      return {
+        rooms: exists
+          ? s.rooms.map((r) => r.id === room.id ? room : r)
+          : [room, ...s.rooms],
+      };
+    });
     return room;
   },
 

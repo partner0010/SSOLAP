@@ -4,9 +4,10 @@
  * profile/[username]/page.tsx — 유저 프로필 페이지
  */
 import { useEffect, useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/store/authStore';
+import { useChatStore } from '@/store/chatStore';
 import PostCard from '@/components/feed/PostCard';
 import toast from 'react-hot-toast';
 import type { Post } from '@/types';
@@ -58,13 +59,16 @@ function ProfileSkeleton() {
 
 export default function ProfilePage() {
   const { username } = useParams<{ username: string }>();
+  const router = useRouter();
   const { user: me, updateUser } = useAuthStore();
+  const { startDm, setActiveRoom } = useChatStore();
 
   const [profile,     setProfile]     = useState<UserProfile | null>(null);
   const [posts,       setPosts]       = useState<Post[]>([]);
   const [isLoading,   setIsLoading]   = useState(true);
   const [isFollowing, setIsFollowing] = useState(false);
-  const [followLoading, setFollowLoading] = useState(false);
+  const [followLoading,  setFollowLoading]  = useState(false);
+  const [dmLoading,      setDmLoading]      = useState(false);
 
   const isOwnProfile = me?.username === username;
 
@@ -88,6 +92,21 @@ export default function ProfilePage() {
     };
     load();
   }, [username]);
+
+  // ── DM 시작 ──────────────────────────────────────────────────────────
+  const handleDm = async () => {
+    if (!me) { toast.error('로그인이 필요합니다'); return; }
+    setDmLoading(true);
+    try {
+      const room = await startDm(username);
+      setActiveRoom(room.id);
+      router.push('/chat');
+    } catch {
+      toast.error('DM을 시작하지 못했습니다');
+    } finally {
+      setDmLoading(false);
+    }
+  };
 
   // ── 팔로우 토글 ──────────────────────────────────────────────────────
   const handleFollow = async () => {
@@ -149,22 +168,35 @@ export default function ProfilePage() {
                 </p>
               </div>
 
-              {/* 팔로우 버튼 */}
+              {/* 액션 버튼 */}
               {!isOwnProfile && (
-                <button
-                  onClick={handleFollow}
-                  disabled={followLoading}
-                  className={`
-                    flex-shrink-0 text-xs px-5 py-2 font-semibold tracking-wide
-                    transition-all disabled:opacity-50
-                    ${isFollowing
-                      ? 'border border-ssolap-border text-ssolap-muted hover:border-red-500/40 hover:text-red-400'
-                      : 'btn-primary'
-                    }
-                  `}
-                >
-                  {followLoading ? '...' : isFollowing ? '팔로잉' : '팔로우'}
-                </button>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {/* DM 버튼 */}
+                  {me && (
+                    <button
+                      onClick={handleDm}
+                      disabled={dmLoading}
+                      className="text-xs px-4 py-2 border border-ssolap-border text-ssolap-muted hover:border-ssolap-silver/40 hover:text-ssolap-silver tracking-wide transition-all disabled:opacity-50"
+                    >
+                      {dmLoading ? '...' : '◧ DM'}
+                    </button>
+                  )}
+                  {/* 팔로우 버튼 */}
+                  <button
+                    onClick={handleFollow}
+                    disabled={followLoading}
+                    className={`
+                      text-xs px-5 py-2 font-semibold tracking-wide
+                      transition-all disabled:opacity-50
+                      ${isFollowing
+                        ? 'border border-ssolap-border text-ssolap-muted hover:border-red-500/40 hover:text-red-400'
+                        : 'btn-primary'
+                      }
+                    `}
+                  >
+                    {followLoading ? '...' : isFollowing ? '팔로잉' : '팔로우'}
+                  </button>
+                </div>
               )}
             </div>
 

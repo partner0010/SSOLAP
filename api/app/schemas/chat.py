@@ -20,6 +20,16 @@ class CreateRoomRequest(BaseModel):
     is_public:      bool = True
 
 
+class DmPartnerBrief(BaseModel):
+    """DM 방에서 대화 상대방 정보"""
+    id:           int
+    username:     str
+    display_name: str
+    avatar_url:   Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
 class RoomResponse(BaseModel):
     id:           int
     name:         str
@@ -33,6 +43,7 @@ class RoomResponse(BaseModel):
     is_member:    bool = False
     online_count: int  = 0
     last_message: Optional["MessageResponse"] = None
+    dm_partner:   Optional[DmPartnerBrief] = None   # direct 방 전용
     created_at:   datetime
 
     model_config = {"from_attributes": True}
