@@ -46,6 +46,11 @@ const Icons = {
       <path d="M12 8v8M8 12h8" />
     </svg>
   ),
+  Admin: () => (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    </svg>
+  ),
   Logout: () => (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
       <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -113,6 +118,25 @@ export default function Sidebar() {
             </Link>
           );
         })}
+
+        {/* 어드민 메뉴 (admin 역할만) */}
+        {user?.role === 'admin' && (
+          <Link
+            href="/admin"
+            className={`
+              flex items-center gap-3 px-4 py-3
+              text-sm tracking-wide font-medium
+              transition-all duration-150
+              ${pathname.startsWith('/admin')
+                ? 'bg-red-500/10 text-red-400 border-l-2 border-red-400 pl-[14px]'
+                : 'text-red-400/50 hover:bg-red-500/5 hover:text-red-400 border-l-2 border-transparent pl-[14px]'
+              }
+            `}
+          >
+            <Icons.Admin />
+            어드민
+          </Link>
+        )}
 
         {/* 게시물 작성 버튼 */}
         <div className="mt-4 px-1">
