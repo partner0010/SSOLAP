@@ -32,6 +32,7 @@ from app.schemas.post import (
     AuthorBrief,
     MediaResponse,
     CommentResponse,
+    CommentsPageResponse,
     CreateCommentRequest,
 )
 from app.routers.deps import get_current_user, get_optional_user
@@ -357,42 +358,60 @@ async def toggle_like(
     return {"liked": liked, "like_count": post.like_count}
 
 
+# ─── 댓글 헬퍼 ────────────────────────────────────────────────────────────────
+
+def _to_comment_response(c: Comment, include_replies: bool = True) -> CommentResponse:
+    return CommentResponse(
+        id=c.id,
+        post_id=c.post_id,
+        author=AuthorBrief(
+            id=c.author.id,
+            username=c.author.username,
+            display_name=c.author.display_name,
+            avatar_url=c.author.avatar_url,
+        ),
+        parent_id=c.parent_id,
+        content=c.content,
+        like_count=c.like_count,
+        replies=[_to_comment_response(r, False) for r in c.replies] if include_replies else [],
+        created_at=c.created_at,
+    )
+
+
 # ─── 댓글 목록 ────────────────────────────────────────────────────────────────
 
-@router.get("/{post_id}/comments", response_model=list[CommentResponse], summary="댓글 목록")
+@router.get("/{post_id}/comments", response_model=CommentsPageResponse, summary="댓글 목록")
 async def get_comments(
     post_id: int,
     page: int = Query(1, ge=1),
-    per_page: int = Query(30, ge=1, le=100),
+    per_page: int = Query(20, ge=1, le=50),
     db: AsyncSession = Depends(get_db),
-) -> list[CommentResponse]:
+) -> CommentsPageResponse:
     offset = (page - 1) * per_page
+
+    total = await db.scalar(
+        select(func.count(Comment.id)).where(
+            and_(Comment.post_id == post_id, Comment.parent_id.is_(None))
+        )
+    ) or 0
+
     comments = (await db.scalars(
         select(Comment)
-        .options(selectinload(Comment.author))
+        .options(
+            selectinload(Comment.author),
+            selectinload(Comment.replies).selectinload(Comment.author),
+        )
         .where(and_(Comment.post_id == post_id, Comment.parent_id.is_(None)))
         .order_by(Comment.created_at)
         .offset(offset)
         .limit(per_page)
     )).all()
 
-    return [
-        CommentResponse(
-            id=c.id,
-            post_id=c.post_id,
-            author=AuthorBrief(
-                id=c.author.id,
-                username=c.author.username,
-                display_name=c.author.display_name,
-                avatar_url=c.author.avatar_url,
-            ),
-            parent_id=c.parent_id,
-            content=c.content,
-            like_count=c.like_count,
-            created_at=c.created_at,
-        )
-        for c in comments
-    ]
+    return CommentsPageResponse(
+        comments=[_to_comment_response(c) for c in comments],
+        total=total,
+        has_next=(offset + per_page) < total,
+    )
 
 
 # ─── 댓글 작성 ────────────────────────────────────────────────────────────────
@@ -464,17 +483,42 @@ async def create_comment(
 
     await db.commit()
 
-    return CommentResponse(
-        id=comment_with_author.id,
-        post_id=comment_with_author.post_id,
-        author=AuthorBrief(
-            id=comment_with_author.author.id,
-            username=comment_with_author.author.username,
-            display_name=comment_with_author.author.display_name,
-            avatar_url=comment_with_author.author.avatar_url,
-        ),
-        parent_id=comment_with_author.parent_id,
-        content=comment_with_author.content,
-        like_count=comment_with_author.like_count,
-        created_at=comment_with_author.created_at,
+    return _to_comment_response(comment_with_author)
+
+
+# ─── 댓글 삭제 ────────────────────────────────────────────────────────────────
+
+@router.delete(
+    "/{post_id}/comments/{comment_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="댓글 삭제",
+)
+async def delete_comment(
+    post_id: int,
+    comment_id: int,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> None:
+    comment = await db.scalar(
+        select(Comment).where(
+            and_(Comment.id == comment_id, Comment.post_id == post_id)
+        )
     )
+    if not comment:
+        raise HTTPException(status_code=404, detail="댓글을 찾을 수 없습니다")
+    if comment.author_id != current_user.id and current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="권한이 없습니다")
+
+    # 최상위 댓글이면 대댓글 수도 같이 삭제됨 (cascade), post comment_count 감소
+    is_top_level = comment.parent_id is None
+    post = await db.get(Post, post_id)
+    if post:
+        # 대댓글 수 포함하여 감소
+        reply_count = await db.scalar(
+            select(func.count(Comment.id)).where(Comment.parent_id == comment_id)
+        ) or 0
+        decrement = 1 + (reply_count if is_top_level else 0)
+        post.comment_count = max(0, post.comment_count - decrement)
+
+    await db.delete(comment)
+    await db.commit()

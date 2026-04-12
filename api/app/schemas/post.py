@@ -92,12 +92,21 @@ class CommentResponse(BaseModel):
     id:         int
     post_id:    int
     author:     AuthorBrief
-    parent_id:  Optional[int]  = None
+    parent_id:  Optional[int]           = None
     content:    str
     like_count: int
+    replies:    List['CommentResponse'] = []
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+CommentResponse.model_rebuild()
+
+
+class CommentsPageResponse(BaseModel):
+    comments: List[CommentResponse]
+    total:    int
+    has_next: bool
 
 
 # ─── 페이지네이션 ─────────────────────────────────────────────────────────────
