@@ -60,12 +60,16 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
       {/* 헤더 */}
       <Header title={title} />
 
-      {/* 메인 콘텐츠 */}
-      <main className="ml-[220px] pt-14 min-h-screen">
-        <div className="max-w-2xl mx-auto px-4 py-6">
-          {children}
-        </div>
-      </main>
+      {/* 메인 콘텐츠 — 채팅은 자체 레이아웃을 사용하므로 래퍼 제외 */}
+      {pathname.startsWith('/chat') ? (
+        <>{children}</>
+      ) : (
+        <main className="ml-[220px] pt-14 min-h-screen">
+          <div className="max-w-2xl mx-auto px-4 py-6">
+            {children}
+          </div>
+        </main>
+      )}
     </div>
   );
 }
