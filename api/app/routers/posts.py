@@ -10,10 +10,11 @@ POST /posts/{id}/like       — 좋아요 토글
 GET  /posts/{id}/comments   — 댓글 목록
 POST /posts/{id}/comments   — 댓글 작성
 """
+from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select, func, desc, and_
+from sqlalchemy import select, func, desc, and_, case, nullslast
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -84,6 +85,7 @@ def _to_post_response(post: Post, liked_ids: set[int]) -> PostResponse:
             for m in post.media
         ],
         is_liked=post.id in liked_ids,
+        boosted_until=post.boosted_until,
         created_at=post.created_at,
         updated_at=post.updated_at,
     )
@@ -116,14 +118,18 @@ async def get_feed(
         )
     ) or 0
 
-    # 게시물 조회
+    # 게시물 조회 (부스트 중인 게시물 우선, 그 다음 최신순)
+    now = datetime.now(timezone.utc)
     posts = (await db.scalars(
         select(Post)
         .options(selectinload(Post.author), selectinload(Post.media))
         .where(
             and_(Post.author_id.in_(feed_user_ids), Post.is_public.is_(True))
         )
-        .order_by(desc(Post.created_at))
+        .order_by(
+            nullslast(desc(case((Post.boosted_until > now, Post.boosted_until), else_=None))),
+            desc(Post.created_at),
+        )
         .offset(offset)
         .limit(per_page)
     )).all()
@@ -161,11 +167,15 @@ async def explore(
         select(func.count(Post.id)).where(and_(*filters))
     ) or 0
 
+    now = datetime.now(timezone.utc)
     posts = (await db.scalars(
         select(Post)
         .options(selectinload(Post.author), selectinload(Post.media))
         .where(and_(*filters))
-        .order_by(desc(Post.created_at))
+        .order_by(
+            nullslast(desc(case((Post.boosted_until > now, Post.boosted_until), else_=None))),
+            desc(Post.created_at),
+        )
         .offset(offset)
         .limit(per_page)
     )).all()

@@ -14,7 +14,7 @@ from app.core.config import settings
 from app.core.database import create_tables
 
 # ─── 라우터 임포트 ────────────────────────────────────────────────────────────
-from app.routers import auth, posts, users, points, upload, chat, notifications, search, admin, stories
+from app.routers import auth, posts, users, points, upload, chat, notifications, search, admin, stories, shop
 
 # ─── 모델 임포트 (create_tables가 모든 모델을 인식하도록) ─────────────────────
 from app.models import user, post, follow, point, chat as chat_model, notification, story as story_model  # noqa: F401
@@ -81,6 +81,7 @@ app.include_router(notifications.router)
 app.include_router(search.router)
 app.include_router(admin.router)
 app.include_router(stories.router)
+app.include_router(shop.router)
 
 # ─── 정적 파일 서빙 (업로드 이미지/영상) ─────────────────────────────────────
 upload_path = Path(settings.UPLOAD_DIR)

@@ -30,6 +30,8 @@ export interface User {
   follower_count: number;
   following_count: number;
   post_count: number;
+  badge?: string | null;
+  badge_expires_at?: string | null;
   created_at: string;   // ISO 8601
 }
 
@@ -91,6 +93,7 @@ export interface Post {
   view_count:    number;
   media:         PostMedia[];
   is_liked:      boolean;
+  boosted_until?: string | null;
   created_at:    string;
   updated_at:    string;
 }

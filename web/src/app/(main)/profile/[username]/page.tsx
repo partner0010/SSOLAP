@@ -17,20 +17,22 @@ import type { Post } from '@/types';
 // ─── 타입 ─────────────────────────────────────────────────────────────────────
 
 interface UserProfile {
-  id:              number;
-  username:        string;
-  display_name:    string;
-  email:           string;
-  bio:             string | null;
-  avatar_url:      string | null;
-  role:            string;
-  is_verified:     boolean;
-  follower_count:  number;
-  following_count: number;
-  post_count:      number;
-  point_balance:   number;
-  is_following:    boolean;
-  created_at:      string;
+  id:               number;
+  username:         string;
+  display_name:     string;
+  email:            string;
+  bio:              string | null;
+  avatar_url:       string | null;
+  role:             string;
+  is_verified:      boolean;
+  follower_count:   number;
+  following_count:  number;
+  post_count:       number;
+  point_balance:    number;
+  is_following:     boolean;
+  badge?:           string | null;
+  badge_expires_at?: string | null;
+  created_at:       string;
 }
 
 // ─── 스켈레톤 ─────────────────────────────────────────────────────────────────
@@ -180,8 +182,14 @@ export default function ProfilePage() {
           <div className="flex-1 min-w-0">
             <div className="flex items-start justify-between gap-3 mb-1">
               <div>
-                <h1 className="text-ssolap-silver font-bold text-lg leading-tight">
+                <h1 className="text-ssolap-silver font-bold text-lg leading-tight flex items-center gap-2">
                   {profile.display_name}
+                  {/* 프리미엄 뱃지 */}
+                  {profile.badge === 'premium' &&
+                   profile.badge_expires_at &&
+                   new Date(profile.badge_expires_at) > new Date() && (
+                    <span title="프리미엄 뱃지" className="text-base leading-none">⭐</span>
+                  )}
                 </h1>
                 <p className="text-ssolap-muted text-xs mt-0.5">
                   @{profile.username}

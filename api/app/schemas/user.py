@@ -68,6 +68,8 @@ class UserResponse(BaseModel):
     following_count: int
     post_count:      int
     point_balance:   int = 0   # UserPoints.balance
+    badge:            Optional[str]      = None
+    badge_expires_at: Optional[datetime] = None
     created_at:      datetime
 
     model_config = {"from_attributes": True}  # SQLAlchemy 모델 → Pydantic 자동 변환

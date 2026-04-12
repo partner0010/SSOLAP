@@ -75,6 +75,7 @@ class PostResponse(BaseModel):
     view_count:    int
     media:         List[MediaResponse] = []
     is_liked:      bool = False   # 현재 요청자가 좋아요 눌렀는지
+    boosted_until: Optional[datetime] = None
     created_at:    datetime
     updated_at:    datetime
 

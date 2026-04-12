@@ -45,6 +45,12 @@ class Post(Base):
     comment_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     view_count:    Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
+    # ── 부스트 ────────────────────────────────────────────────────────────────
+    boosted_until: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None,
+        comment="피드 상단 노출 만료 시각 (None = 부스트 없음)",
+    )
+
     # ── 타임스탬프 ────────────────────────────────────────────────────────────
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False,

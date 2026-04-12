@@ -10,6 +10,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { ko } from 'date-fns/locale';
 import { useFeedStore } from '@/store/feedStore';
 import { useAuthStore } from '@/store/authStore';
+import { api } from '@/lib/api';
 import type { Post } from '@/types';
 import toast from 'react-hot-toast';
 
@@ -51,11 +52,31 @@ interface PostCardProps {
 }
 
 export default function PostCard({ post, onDeleted }: PostCardProps) {
-  const [showMenu, setShowMenu] = useState(false);
+  const [showMenu,   setShowMenu]   = useState(false);
+  const [boosting,   setBoosting]   = useState(false);
+  const [isBoosted,  setIsBoosted]  = useState(() => {
+    if (!post.boosted_until) return false;
+    return new Date(post.boosted_until) > new Date();
+  });
   const { toggleLike, deletePost } = useFeedStore();
   const { user } = useAuthStore();
 
   const isOwn = user?.id === post.author.id;
+
+  const handleBoost = async () => {
+    if (boosting) return;
+    setBoosting(true);
+    try {
+      const result = await api.post<{ message: string }>(`/shop/purchase/boost_post`, { ref_id: post.id });
+      toast.success(result.message);
+      setIsBoosted(true);
+    } catch (e: unknown) {
+      const detail = (e as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      toast.error(detail ?? '부스트에 실패했습니다');
+    } finally {
+      setBoosting(false);
+    }
+  };
 
   const handleLike = async () => {
     try {
@@ -83,7 +104,15 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
   });
 
   return (
-    <article className="card hover:border-ssolap-silver/20 transition-all duration-150 group">
+    <article className={`card hover:border-ssolap-silver/20 transition-all duration-150 group ${isBoosted ? 'border-ssolap-silver/30' : ''}`}>
+      {/* ── 부스트 인디케이터 ──────────────────────────────────────────── */}
+      {isBoosted && (
+        <div className="flex items-center gap-1.5 mb-3 -mt-1">
+          <span className="text-ssolap-silver text-[10px]">▲</span>
+          <span className="text-ssolap-silver/60 text-[10px] tracking-widest uppercase">Boosted</span>
+        </div>
+      )}
+
       {/* ── 헤더: 작성자 + 시간 ───────────────────────────────────────── */}
       <div className="flex items-start justify-between mb-4">
         <Link
@@ -208,6 +237,26 @@ export default function PostCard({ post, onDeleted }: PostCardProps) {
             <span className="font-mono">{post.comment_count.toLocaleString()}</span>
           )}
         </Link>
+
+        {/* 부스트 (본인 게시물만) */}
+        {isOwn && (
+          <button
+            onClick={handleBoost}
+            disabled={boosting || isBoosted}
+            title={isBoosted ? '부스트 중' : '500 SP로 24h 상단 노출'}
+            className={`
+              flex items-center gap-1 text-xs transition-all
+              ${isBoosted
+                ? 'text-ssolap-silver cursor-default'
+                : 'text-ssolap-muted hover:text-ssolap-silver'
+              }
+              ${boosting ? 'opacity-50 cursor-wait' : ''}
+            `}
+          >
+            <span className="text-[13px]">▲</span>
+            {isBoosted ? <span className="text-[10px]">부스트 중</span> : null}
+          </button>
+        )}
 
         {/* 공유 */}
         <button
