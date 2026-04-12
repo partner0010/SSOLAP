@@ -17,10 +17,12 @@ from sqlalchemy import select, func, desc, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.user import User
 from app.models.post import Post, PostMedia, PostLike, Comment
 from app.models.follow import Follow
+from app.services.point_service import award_points
 from app.schemas.post import (
     CreatePostRequest,
     UpdatePostRequest,
@@ -220,6 +222,15 @@ async def create_post(
     # 작성자 post_count 증가
     current_user.post_count += 1
 
+    # 게시물 작성 포인트 지급
+    await award_points(
+        db, user=current_user,
+        action="post_create",
+        amount=settings.POINT_POST_REWARD,
+        description="게시물 작성 보상",
+        ref_id=post.id,
+    )
+
     await db.commit()
     await db.refresh(post)
 
@@ -414,6 +425,15 @@ async def create_comment(
     db.add(comment)
     post.comment_count += 1
     await db.flush()
+
+    # 댓글 작성 포인트 지급
+    await award_points(
+        db, user=current_user,
+        action="comment_create",
+        amount=settings.POINT_COMMENT_REWARD,
+        description="댓글 작성 보상",
+        ref_id=comment.id,
+    )
 
     # author 로드
     await db.refresh(comment)
