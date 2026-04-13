@@ -2,8 +2,10 @@
 routers/deps.py — FastAPI 공통 의존성 (Dependencies)
 라우터에서 Depends()로 주입해서 사용
 """
+from typing import Optional
+
 from fastapi import Depends, HTTPException, status
-from fastapi.security import OAuth2PasswordBearer
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from jose import JWTError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -75,3 +77,31 @@ async def get_admin_user(
             detail="관리자 권한이 필요합니다",
         )
     return current_user
+
+
+# ── 선택적 인증 (토큰 없어도 통과, 있으면 유저 반환) ────────────────────────
+oauth2_optional = OAuth2PasswordBearer(tokenUrl="/auth/login", auto_error=False)
+
+
+async def get_optional_user(
+    token: Optional[str] = Depends(oauth2_optional),
+    db:    AsyncSession  = Depends(get_db),
+) -> Optional[User]:
+    """
+    토큰이 있으면 검증 후 유저 반환
+    토큰이 없으면 None 반환 (인증 불필요 엔드포인트에 사용)
+    """
+    if not token:
+        return None
+    try:
+        payload = decode_token(token)
+        if payload.get("type") != "access":
+            return None
+        user_id = int(payload["sub"])
+    except (JWTError, KeyError, ValueError):
+        return None
+
+    user = await db.scalar(select(User).where(User.id == user_id))
+    if not user or not user.is_active:
+        return None
+    return user

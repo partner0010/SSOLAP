@@ -30,6 +30,8 @@ export interface User {
   follower_count: number;
   following_count: number;
   post_count: number;
+  badge?: string | null;
+  badge_expires_at?: string | null;
   created_at: string;   // ISO 8601
 }
 
@@ -58,41 +60,52 @@ export interface SignupRequest {
   password_confirm: string;
 }
 
+// ─── 게시물 미디어 ────────────────────────────────────────────────────────────
+export interface PostMedia {
+  id:            number;
+  url:           string;
+  media_type:    'image' | 'video';
+  width?:        number;
+  height?:       number;
+  duration?:     number;
+  display_order: number;
+}
+
+// ─── 게시물 작성자 요약 ───────────────────────────────────────────────────────
+export interface AuthorBrief {
+  id:           number;
+  username:     string;
+  display_name: string;
+  avatar_url?:  string;
+}
+
 // ─── 게시물 ────────────────────────────────────────────────────────────────────
-export type PostType = 'short' | 'long' | 'image' | 'text';
-export type PostVisibility = 'public' | 'followers' | 'private';
+export type PostType = 'text' | 'image' | 'video' | 'short';
 
 export interface Post {
-  id: string;           // MongoDB ObjectId
-  author: UserProfile;
-  type: PostType;
-  title?: string;
-  content?: string;     // 텍스트 본문
-  media_url?: string;   // 영상/이미지 URL
-  thumbnail_url?: string;
-  duration?: number;    // 영상 길이 (초)
-  visibility: PostVisibility;
-  like_count: number;
+  id:            number;
+  author:        AuthorBrief;
+  content?:      string;
+  post_type:     PostType;
+  is_public:     boolean;
+  like_count:    number;
   comment_count: number;
-  view_count: number;
-  share_count: number;
-  is_liked?: boolean;
-  tags: string[];
-  boost_score: number;  // 부스트 배율 (기본 1.0)
-  is_boosted: boolean;
-  created_at: string;
+  view_count:    number;
+  media:         PostMedia[];
+  is_liked:      boolean;
+  boosted_until?: string | null;
+  created_at:    string;
+  updated_at:    string;
 }
 
 // ─── 댓글 ─────────────────────────────────────────────────────────────────────
 export interface Comment {
-  id: string;
-  post_id: string;
-  author: UserProfile;
-  content: string;
-  parent_id?: string;   // 대댓글
+  id:         number;
+  post_id:    number;
+  author:     AuthorBrief;
+  content:    string;
+  parent_id?: number;
   like_count: number;
-  is_liked?: boolean;
-  replies?: Comment[];
   created_at: string;
 }
 

@@ -92,6 +92,16 @@ class User(Base):
         comment="마지막 로그인 시각"
     )
 
+    # ── 프리미엄 뱃지 ─────────────────────────────────────────────────────────
+    badge: Mapped[Optional[str]] = mapped_column(
+        String(30), nullable=True, default=None,
+        comment="뱃지 종류 (premium | creator | ...) — None이면 없음",
+    )
+    badge_expires_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None,
+        comment="뱃지 만료 시각",
+    )
+
     # ── 관계 (Relationships) ──────────────────────────────────────────────────
     point_balance: Mapped["UserPoints"] = relationship(
         "UserPoints",
@@ -99,6 +109,18 @@ class User(Base):
         uselist=False,   # 1:1 관계
         cascade="all, delete-orphan",
         lazy="select",
+    )
+    posts: Mapped[list["Post"]] = relationship(
+        "Post",
+        back_populates="author",
+        cascade="all, delete-orphan",
+        lazy="noload",   # 필요할 때만 로드
+    )
+    stories: Mapped[list["Story"]] = relationship(
+        "Story",
+        back_populates="author",
+        cascade="all, delete-orphan",
+        lazy="noload",
     )
 
     def __repr__(self) -> str:
