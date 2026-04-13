@@ -1,4 +1,42 @@
+import withPWA from 'next-pwa';
 
+const pwaConfig = withPWA({
+  dest: 'public',
+  register: true,
+  skipWaiting: true,
+  // 개발 환경에서는 SW 비활성화
+  disable: process.env.NODE_ENV === 'development',
+  runtimeCaching: [
+    // API 응답 — Network First (항상 최신 데이터)
+    {
+      urlPattern: /^https?:\/\/.*\/api\/.*/i,
+      handler: 'NetworkFirst',
+      options: {
+        cacheName: 'api-cache',
+        expiration: { maxEntries: 200, maxAgeSeconds: 60 * 5 },
+        networkTimeoutSeconds: 10,
+      },
+    },
+    // 업로드 이미지/영상 — Cache First (변경 없음)
+    {
+      urlPattern: /^https?:\/\/.*\/uploads\/.*/i,
+      handler: 'CacheFirst',
+      options: {
+        cacheName: 'uploads-cache',
+        expiration: { maxEntries: 500, maxAgeSeconds: 60 * 60 * 24 * 30 },
+      },
+    },
+    // 폰트, 정적 파일 — Stale While Revalidate
+    {
+      urlPattern: /\.(png|jpg|jpeg|svg|gif|webp|ico|woff2?)$/i,
+      handler: 'StaleWhileRevalidate',
+      options: {
+        cacheName: 'static-assets',
+        expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 7 },
+      },
+    },
+  ],
+});
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -34,4 +72,4 @@ const nextConfig = {
   },
 };
 
-export default nextConfig;
+export default pwaConfig(nextConfig);
