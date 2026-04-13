@@ -19,12 +19,13 @@ from app.models.point import PointTransaction
 # ─── 포인트 지급 ──────────────────────────────────────────────────────────────
 
 async def award_points(
-    db:          AsyncSession,
-    user:        User,
-    action:      str,
-    amount:      int,
-    description: str,
-    ref_id:      int | None = None,
+    db:             AsyncSession,
+    user:           User,
+    action:         str,
+    amount:         int,
+    description:    str,
+    ref_id:         int | None = None,
+    silent_on_cap:  bool = False,  # True면 한도 초과 시 None 반환 (예외 미발생)
 ) -> PointTransaction:
     """
     포인트 지급 (공통)
@@ -56,7 +57,12 @@ async def award_points(
     actual_amount = min(amount, remaining_cap)
 
     if actual_amount <= 0:
-        return None  # 한도 초과 — 조용히 건너뜀
+        if silent_on_cap:
+            return None  # 체크인 등 내부 로직에서 조용히 건너뜀
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"오늘의 S포인트 획득 한도({settings.DAILY_POINT_CAP}SP)에 도달했습니다. 내일 자정(UTC)에 초기화됩니다.",
+        )
 
     # UserPoints 갱신
     point_row = await _get_or_create_points(db, user)
@@ -157,13 +163,14 @@ async def daily_checkin(
             "next_checkin_at":    tomorrow_start.isoformat(),
         }
 
-    # 체크인 포인트 지급
+    # 체크인 포인트 지급 (일일 한도 도달 시 0SP로 처리 — 체크인 자체는 기록됨)
     tx = await award_points(
         db,
         user=user,
         action="daily_checkin",
         amount=settings.POINT_CHECKIN_REWARD,
         description="일일 출석 체크인 보상",
+        silent_on_cap=True,
     )
 
     point_row = await _get_or_create_points(db, user)

@@ -110,36 +110,43 @@ export interface Comment {
 }
 
 // ─── 채팅 ─────────────────────────────────────────────────────────────────────
-export type RoomType = 'direct' | 'group' | 'channel';
-export type EntryType = 'public' | 'password' | 'point' | 'pass';
+export type RoomType  = 'direct' | 'group' | 'channel';
+export type EntryType = 'open'   | 'password' | 'point' | 'invite';
+
+export interface ChatSenderBrief {
+  id:           number;
+  username:     string;
+  display_name: string;
+  avatar_url?:  string | null;
+}
 
 export interface ChatRoom {
-  id: string;
-  name: string;
-  type: RoomType;
+  id:           number;
+  name:         string;
   description?: string;
-  avatar_url?: string;
+  room_type:    RoomType;
+  entry_type:   EntryType;
+  entry_fee:    number;
+  max_members:  number;
   member_count: number;
-  entry_control: {
-    type: EntryType;
-    entry_fee_points?: number;
-  };
+  is_public:    boolean;
+  is_member:    boolean;
+  online_count: number;
   last_message?: ChatMessage;
-  unread_count: number;
-  created_at: string;
+  dm_partner?:  ChatSenderBrief | null;  // direct 방 전용
+  created_at:   string;
 }
 
 export interface ChatMessage {
-  id: string;
-  room_id: string;
-  sender: UserProfile;
-  content: string;
-  message_type: 'text' | 'image' | 'video' | 'system';
-  is_secret: boolean;
-  visible_to?: number[];  // secret 메시지 수신자
-  moderation_status: 'pending' | 'safe' | 'warning' | 'flagged' | 'blocked';
-  edit_history?: Array<{ content: string; edited_at: string }>;
-  created_at: string;
+  id:                   number;
+  room_id:              number;
+  sender:               ChatSenderBrief | null;
+  message_type:         'text' | 'image' | 'video' | 'secret';
+  content:              string;
+  media_url?:           string | null;
+  secret_recipient_id?: number | null;
+  is_deleted:           boolean;
+  created_at:           string;
 }
 
 // ─── S포인트 ───────────────────────────────────────────────────────────────────
