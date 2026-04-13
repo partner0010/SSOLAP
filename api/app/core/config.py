@@ -35,7 +35,8 @@ class Settings(BaseSettings):
     # ── CORS ──────────────────────────────────────────────────────────────────
     # 쉼표 구분 문자열로 받아서 리스트로 변환
     # .env 예: CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
-    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
+    # capacitor:// — Android/iOS Capacitor 앱 오리진
+    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000,capacitor://localhost,https://localhost"
 
     @property
     def cors_origins_list(self) -> list[str]:
