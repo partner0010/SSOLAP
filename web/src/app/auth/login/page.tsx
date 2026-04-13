@@ -36,8 +36,14 @@ export default function LoginPage() {
       toast.success('로그인 성공');
       router.push('/feed');
     } catch (err) {
-      const apiErr = err as ApiError;
-      toast.error(apiErr.detail ?? '로그인에 실패했습니다');
+      // FastAPI 에러: detail이 문자열이거나 배열(422 validation)일 수 있음
+      const apiErr = err as ApiError & { detail?: unknown };
+      const msg = typeof apiErr.detail === 'string'
+        ? apiErr.detail
+        : Array.isArray(apiErr.detail)
+          ? (apiErr.detail[0] as { msg?: string })?.msg ?? '로그인에 실패했습니다'
+          : '로그인에 실패했습니다';
+      toast.error(msg);
     }
   };
 

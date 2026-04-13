@@ -37,16 +37,13 @@ export const useAuthStore = create<AuthState>()(
       login: async (credentials) => {
         set({ isLoading: true });
         try {
-          // FastAPI 기본 OAuth2 폼 방식
-          const formData = new FormData();
-          formData.append('username', credentials.username);
-          formData.append('password', credentials.password);
+          // FastAPI OAuth2PasswordRequestForm: application/x-www-form-urlencoded 필수
+          // FormData + 수동 Content-Type 지정 시 boundary 누락으로 파싱 실패
+          const params = new URLSearchParams();
+          params.append('username', credentials.username);
+          params.append('password', credentials.password);
 
-          const tokens = await api.post<AuthTokens>(
-            '/auth/login',
-            formData,
-            { headers: { 'Content-Type': 'multipart/form-data' } }
-          );
+          const tokens = await api.post<AuthTokens>('/auth/login', params);
 
           setTokens(tokens.access_token, tokens.refresh_token);
 
