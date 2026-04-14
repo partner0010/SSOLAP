@@ -166,10 +166,10 @@ async def purchase_item(
         for fid in follower_ids:
             await create_notification(
                 db,
-                user_id=fid,
+                recipient_id=fid,
                 noti_type="system",
                 message=f"{me.display_name}님이 새 스토리를 올렸습니다 ✦",
-                actor_id=me.id,
+                actor=me,
                 link="/feed",
             )
         message = f"팔로워 {len(follower_ids)}명에게 스토리 알림이 발송되었습니다"

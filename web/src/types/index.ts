@@ -185,13 +185,20 @@ export type NotificationType =
   | 'point_earned'
   | 'system';
 
+export interface NotiActor {
+  id:           number;
+  username:     string;
+  display_name: string;
+  avatar_url?:  string | null;
+}
+
 export interface Notification {
-  id: number;
-  type: NotificationType;
-  actor?: UserProfile;  // 행동 주체
-  message: string;
-  link?: string;
-  is_read: boolean;
+  id:        number;
+  noti_type: string;        // API 반환 필드명 (type 아님)
+  actor?:    NotiActor;
+  message:   string;
+  link?:     string;
+  is_read:   boolean;
   created_at: string;
 }
 

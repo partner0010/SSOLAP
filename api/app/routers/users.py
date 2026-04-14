@@ -44,6 +44,8 @@ def _user_to_response(user: User) -> UserResponse:
         following_count=user.following_count,
         post_count=user.post_count,
         point_balance=balance,
+        badge=user.badge,
+        badge_expires_at=user.badge_expires_at,
         created_at=user.created_at,
     )
 
