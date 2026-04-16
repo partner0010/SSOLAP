@@ -2,13 +2,51 @@ import withPWA from 'next-pwa';
 
 // Docker 프로덕션 빌드 여부
 const isDocker = process.env.DOCKER_BUILD === 'true';
+const isDev    = process.env.NODE_ENV === 'development';
+
+// ─── HTTP 보안 헤더 ──────────────────────────────────────────────────────────
+const securityHeaders = [
+  // Clickjacking 방어
+  { key: 'X-Frame-Options',          value: 'DENY' },
+  // MIME 스니핑 방어
+  { key: 'X-Content-Type-Options',   value: 'nosniff' },
+  // XSS 필터 (레거시 브라우저)
+  { key: 'X-XSS-Protection',         value: '1; mode=block' },
+  // Referrer 정보 최소화
+  { key: 'Referrer-Policy',          value: 'strict-origin-when-cross-origin' },
+  // 권한 정책 — 불필요한 브라우저 기능 차단
+  {
+    key: 'Permissions-Policy',
+    value: 'camera=(), microphone=(), geolocation=(), payment=()',
+  },
+  // CSP (Content Security Policy) — XSS 공격 완화
+  // 개발: 'unsafe-eval' 허용 (Next.js dev 서버 필요)
+  // 프로덕션: 엄격 모드
+  {
+    key: 'Content-Security-Policy',
+    value: [
+      "default-src 'self'",
+      isDev
+        ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'"
+        : "script-src 'self' 'unsafe-inline'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob: http://localhost:8000 https:",
+      "media-src 'self' blob: http://localhost:8000 https:",
+      "font-src 'self'",
+      "connect-src 'self' http://localhost:8000 ws://localhost:8000 wss://localhost:8000 https:",
+      "frame-ancestors 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+    ].join('; '),
+  },
+];
 
 const pwaConfig = withPWA({
   dest: 'public',
   register: true,
   skipWaiting: true,
   // 개발 환경에서는 SW 비활성화
-  disable: process.env.NODE_ENV === 'development',
+  disable: isDev,
   runtimeCaching: [
     // API 응답 — Network First (항상 최신 데이터)
     {
@@ -67,6 +105,16 @@ const nextConfig = {
       {
         source: '/api/:path*',
         destination: `${process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8000'}/:path*`,
+      },
+    ];
+  },
+
+  // ── HTTP 보안 헤더 ─────────────────────────────────────────────────────────
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: securityHeaders,
       },
     ];
   },

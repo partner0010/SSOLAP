@@ -2,6 +2,7 @@
 core/security.py — JWT 생성/검증 + 비밀번호 해싱
 passlib 대신 bcrypt를 직접 사용 (Python 3.13 호환)
 """
+import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
@@ -11,12 +12,35 @@ from jose import JWTError, jwt
 from app.core.config import settings
 
 
+# ─── 비밀번호 정책 ────────────────────────────────────────────────────────────
+
+PASSWORD_MIN_LEN = 8
+
+def validate_password_strength(password: str) -> None:
+    """
+    비밀번호 강도 검사 — 위반 시 ValueError 발생
+    규칙: 8자 이상 / 영문 대문자 1개 이상 / 숫자 1개 이상 / 특수문자 1개 이상
+    (한국 개인정보보호법 기술적 보호조치 기준 준수)
+    """
+    errors = []
+    if len(password) < PASSWORD_MIN_LEN:
+        errors.append(f"최소 {PASSWORD_MIN_LEN}자 이상이어야 합니다")
+    if not re.search(r"[A-Za-z]", password):
+        errors.append("영문자를 포함해야 합니다")
+    if not re.search(r"\d", password):
+        errors.append("숫자를 포함해야 합니다")
+    if not re.search(r"[!@#$%^&*()_+\-=\[\]{};':\"\\|,.<>/?`~]", password):
+        errors.append("특수문자(!@#$%^&* 등)를 포함해야 합니다")
+    if errors:
+        raise ValueError(" / ".join(errors))
+
+
 # ─── 비밀번호 해싱 (bcrypt 직접 사용) ────────────────────────────────────────
 
 def hash_password(plain: str) -> str:
     """평문 비밀번호 → bcrypt 해시"""
     password_bytes = plain.encode("utf-8")
-    salt = bcrypt.gensalt(rounds=12)  # 12 rounds = 보안 vs 성능 균형
+    salt = bcrypt.gensalt(rounds=settings.BCRYPT_ROUNDS)
     return bcrypt.hashpw(password_bytes, salt).decode("utf-8")
 
 

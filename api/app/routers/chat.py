@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.database import get_db
-from app.core.security import decode_token
+from app.core.security import decode_token, hash_password, verify_password
 from app.models.user import User
 from app.models.chat import ChatRoom, ChatMember, ChatMessage
 from app.routers.deps import get_current_user, get_optional_user
@@ -192,13 +192,18 @@ async def create_room(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> RoomResponse:
+    # 비밀번호 방: 평문 저장 금지 → bcrypt 해싱 (개인정보보호법 기술적 보호조치)
+    hashed_pw = None
+    if body.entry_type == "password" and body.entry_password:
+        hashed_pw = hash_password(body.entry_password)
+
     room = ChatRoom(
         owner_id=current_user.id,
         name=body.name,
         description=body.description,
         room_type=body.room_type,
         entry_type=body.entry_type,
-        entry_password=body.entry_password,
+        entry_password=hashed_pw,   # 해시된 값 저장
         entry_fee=body.entry_fee,
         max_members=body.max_members,
         is_public=body.is_public,
@@ -347,9 +352,10 @@ async def join_room(
     if await _is_member(db, room_id, current_user.id):
         return {"joined": True, "message": "이미 입장한 방입니다"}
 
-    # 비밀번호 확인
+    # 비밀번호 확인 (해시 검증)
     if room.entry_type == "password":
-        if not body.password or body.password != room.entry_password:
+        if not body.password or not room.entry_password or \
+                not verify_password(body.password, room.entry_password):
             raise HTTPException(status_code=403, detail="비밀번호가 올바르지 않습니다")
 
     # 포인트 입장료 차감
@@ -481,19 +487,24 @@ async def websocket_chat(
       { "event": "leave",   "data": { "user_id": 1, "username": "..." } }
       { "event": "error",   "data": { "detail": "..." } }
     """
-    # ── JWT 토큰 검증 ─────────────────────────────────────────────────
-    user: Optional[User] = None
-    if token:
-        try:
-            payload = decode_token(token)
-            if payload.get("type") == "access":
-                user_id = int(payload["sub"])
-                user = await db.scalar(select(User).where(User.id == user_id))
-        except (JWTError, Exception):
-            pass
+    # ── JWT 토큰 검증 (토큰 없거나 유효하지 않으면 즉시 거부) ────────────────
+    if not token:
+        await websocket.close(code=4001, reason="token required")
+        return
+
+    try:
+        payload = decode_token(token)
+        if payload.get("type") != "access":
+            await websocket.close(code=4001, reason="invalid token type")
+            return
+        user_id = int(payload["sub"])
+        user: Optional[User] = await db.scalar(select(User).where(User.id == user_id))
+    except (JWTError, ValueError, KeyError):
+        await websocket.close(code=4001, reason="token invalid or expired")
+        return
 
     if not user or not user.is_active:
-        await websocket.close(code=4001, reason="인증 실패")
+        await websocket.close(code=4001, reason="user inactive")
         return
 
     # ── 멤버십 확인 ───────────────────────────────────────────────────

@@ -153,11 +153,13 @@ async def list_users(
     offset = (page - 1) * per_page
     filters = []
     if q:
-        like = f"%{q}%"
+        # LIKE 메타문자 이스케이프 (SQL Injection 방어)
+        escaped = q.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        like    = f"%{escaped}%"
         filters.append(
-            (User.username.like(like)) |
-            (User.email.like(like)) |
-            (User.display_name.like(like))
+            (User.username.like(like, escape="\\")) |
+            (User.email.like(like, escape="\\")) |
+            (User.display_name.like(like, escape="\\"))
         )
     if role:
         filters.append(User.role == role)
@@ -234,18 +236,23 @@ async def update_user(
 
 # ─── 유저 삭제 ────────────────────────────────────────────────────────────────
 
-@router.delete("/users/{user_id}", status_code=204, summary="유저 삭제")
+@router.delete("/users/{user_id}", status_code=204, summary="유저 비활성화 (소프트 삭제)")
 async def delete_user(
     user_id: int,
     admin:   User = Depends(get_admin_user),
     db:      AsyncSession = Depends(get_db),
 ) -> None:
+    """
+    유저 계정을 완전 삭제하지 않고 is_active=False로 비활성화합니다.
+    - 한국 개인정보보호법: 거래·포인트 기록 보관 의무(5년) 준수
+    - 법적 분쟁 시 증거 보전
+    """
     target = await db.get(User, user_id)
     if not target:
         raise HTTPException(status_code=404, detail="유저를 찾을 수 없습니다")
     if target.id == admin.id:
-        raise HTTPException(status_code=400, detail="자신의 계정은 삭제할 수 없습니다")
-    await db.delete(target)
+        raise HTTPException(status_code=400, detail="자신의 계정은 비활성화할 수 없습니다")
+    target.is_active = False
     await db.commit()
 
 

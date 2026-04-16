@@ -100,10 +100,23 @@ export const useAuthStore = create<AuthState>()(
 
     {
       name: 'ssolap-auth',
-      // 민감 정보(password 등)는 localStorage에 저장 안 함
-      // user 정보만 캐시 (토큰은 쿠키에 별도 저장)
       storage: createJSONStorage(() => localStorage),
-      partialize: (state) => ({ user: state.user }),
+      // localStorage 저장 범위 최소화 (개인정보보호 원칙)
+      // - email, role 제외 (XSS 탈취 시 노출 최소화)
+      // - 토큰은 쿠키에만 저장, 여기서는 제외
+      // - password는 절대 저장 안 함
+      partialize: (state) => ({
+        user: state.user ? {
+          id:           state.user.id,
+          username:     state.user.username,
+          display_name: state.user.display_name,
+          avatar_url:   state.user.avatar_url,
+          role:         state.user.role,
+          point_balance: state.user.point_balance,
+          badge:         state.user.badge,
+          badge_expires_at: state.user.badge_expires_at,
+        } : null,
+      }),
       onRehydrateStorage: () => (state) => {
         // 새로고침 시: localStorage에서 user 복원 후 서버에서 최신 정보 재확인
         if (state) {

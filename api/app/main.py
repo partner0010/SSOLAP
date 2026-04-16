@@ -2,16 +2,33 @@
 main.py — FastAPI 앱 진입점
 uvicorn app.main:app --reload 로 실행
 """
+import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+from fastapi.responses import JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.core.config import settings
 from app.core.database import create_tables
+
+# ─── 로거 설정 ─────────────────────────────────────────────────────────────
+logging.basicConfig(
+    level=logging.DEBUG if settings.DEBUG else logging.WARNING,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logger = logging.getLogger(__name__)
+
+# ─── Rate Limiter (IP 기반) ───────────────────────────────────────────────
+limiter = Limiter(key_func=get_remote_address)
 
 # ─── 라우터 임포트 ────────────────────────────────────────────────────────────
 from app.routers import auth, posts, users, points, upload, chat, notifications, search, admin, stories, shop
@@ -31,9 +48,15 @@ async def lifespan(app: FastAPI):
     # 운영 환경에서는 Alembic 마이그레이션으로 대체
     if settings.DEBUG:
         await create_tables()
+        # DB URL에서 인증정보 마스킹 후 출력
+        db_safe = settings.DATABASE_URL
+        if "@" in db_safe:
+            scheme_end = db_safe.find("://") + 3
+            at_pos     = db_safe.rfind("@")
+            db_safe    = db_safe[:scheme_end] + "***:***" + db_safe[at_pos:]
         print(f"\n{'='*50}")
-        print(f"  {settings.APP_NAME} v{settings.APP_VERSION}")
-        print(f"  DB: {settings.DATABASE_URL}")
+        print(f"  {settings.APP_NAME} v{settings.APP_VERSION}  [DEBUG]")
+        print(f"  DB : {db_safe}")
         print(f"  Docs: http://localhost:8000/docs")
         print(f"{'='*50}\n")
 
@@ -41,6 +64,29 @@ async def lifespan(app: FastAPI):
 
     # 앱 종료 시 (필요한 정리 작업)
     print("[SSOLAP API] Shutting down...")
+
+
+# ─── 보안 헤더 미들웨어 ──────────────────────────────────────────────────────
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """모든 응답에 HTTP 보안 헤더 주입"""
+    async def dispatch(self, request: Request, call_next):
+        response: Response = await call_next(request)
+        # Clickjacking 방어
+        response.headers["X-Frame-Options"]        = "DENY"
+        # MIME 스니핑 방어
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        # XSS 필터 (레거시 브라우저)
+        response.headers["X-XSS-Protection"]       = "1; mode=block"
+        # Referrer 정보 최소화
+        response.headers["Referrer-Policy"]         = "strict-origin-when-cross-origin"
+        # HTTPS 강제 (프로덕션)
+        if not settings.DEBUG:
+            response.headers["Strict-Transport-Security"] = (
+                "max-age=31536000; includeSubDomains"
+            )
+        # 서버 정보 숨기기
+        response.headers.pop("server", None)
+        return response
 
 
 # ─── FastAPI 앱 생성 ──────────────────────────────────────────────────────────
@@ -55,10 +101,19 @@ app = FastAPI(
 ### 인증
 모든 보호된 엔드포인트는 `Authorization: Bearer <token>` 헤더 필요
     """,
-    docs_url="/docs",       # Swagger UI
-    redoc_url="/redoc",     # ReDoc UI
+    # Swagger/ReDoc: DEBUG 모드에서만 활성화 (프로덕션 비공개)
+    docs_url="/docs"  if settings.DEBUG else None,
+    redoc_url="/redoc" if settings.DEBUG else None,
     lifespan=lifespan,
 )
+
+# ─── Rate Limiter 등록 ───────────────────────────────────────────────────────
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# ─── 미들웨어 등록 ────────────────────────────────────────────────────────────
+# 보안 헤더
+app.add_middleware(SecurityHeadersMiddleware)
 
 # ─── CORS 미들웨어 ────────────────────────────────────────────────────────────
 # 프론트엔드(Next.js)에서 API 호출 허용
@@ -66,8 +121,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "X-Requested-With"],
 )
 
 # ─── 라우터 등록 ──────────────────────────────────────────────────────────────
@@ -91,12 +146,14 @@ app.mount("/uploads", StaticFiles(directory=str(upload_path)), name="uploads")
 # ─── 헬스체크 ────────────────────────────────────────────────────────────────
 @app.get("/", tags=["헬스체크"])
 async def root():
-    return {
+    resp = {
         "service": settings.APP_NAME,
         "version": settings.APP_VERSION,
-        "status": "running",
-        "docs": "/docs",
+        "status":  "running",
     }
+    if settings.DEBUG:
+        resp["docs"] = "/docs"
+    return resp
 
 
 @app.get("/health", tags=["헬스체크"])

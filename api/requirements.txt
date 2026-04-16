@@ -24,5 +24,9 @@ redis==5.2.1
 # HTTP 클라이언트 (AI API 호출용)
 httpx==0.28.1
 
+# 보안 / Rate Limiting
+slowapi==0.1.9             # Rate limiting (IP 기반 요청 제한)
+bcrypt==4.2.1              # 비밀번호 해싱 (python-jose 의존성 충돌 방지)
+
 # 유틸리티
 python-dotenv==1.1.0

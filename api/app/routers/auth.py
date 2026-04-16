@@ -6,18 +6,22 @@ POST /auth/refresh  — 액세스 토큰 갱신
 POST /auth/logout   — 로그아웃 (서버 측 처리)
 GET  /auth/me       — 내 정보 조회
 """
+import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from jose import JWTError
-from sqlalchemy import select
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.security import (
     hash_password,
     verify_password,
+    validate_password_strength,
     create_access_token,
     create_refresh_token,
     decode_token,
@@ -31,7 +35,9 @@ from app.schemas.user import (
 )
 from app.routers.deps import get_current_user
 
-router = APIRouter(prefix="/auth", tags=["인증"])
+router  = APIRouter(prefix="/auth", tags=["인증"])
+logger  = logging.getLogger(__name__)
+limiter = Limiter(key_func=get_remote_address)
 
 
 # ─── 회원가입 ─────────────────────────────────────────────────────────────────
@@ -41,7 +47,9 @@ router = APIRouter(prefix="/auth", tags=["인증"])
     status_code=status.HTTP_201_CREATED,
     summary="회원가입",
 )
+@limiter.limit("5/minute")           # 회원가입 스팸 방어: IP당 1분에 5회 제한
 async def signup(
+    request: Request,
     body: SignupRequest,
     db: AsyncSession = Depends(get_db),
 ) -> UserResponse:
@@ -49,11 +57,21 @@ async def signup(
     새 계정 생성
 
     - username, email 중복 체크
+    - 비밀번호 강도 검사 (8자+영문+숫자+특수문자)
     - 비밀번호 bcrypt 해싱
     - 초기 포인트 잔액 행 생성
     """
     # 비밀번호 일치 확인
     body.validate_passwords_match()
+
+    # 비밀번호 강도 검사 (서버 측 이중 검증)
+    try:
+        validate_password_strength(body.password)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"비밀번호 보안 기준 미달: {exc}",
+        )
 
     # ── 중복 체크 ─────────────────────────────────────────────────────────────
     exists_username = await db.scalar(
@@ -92,6 +110,7 @@ async def signup(
     await db.commit()
     await db.refresh(new_user)
 
+    logger.info("New user registered: id=%s username=%s", new_user.id, new_user.username)
     return _to_response(new_user)
 
 
@@ -101,7 +120,9 @@ async def signup(
     response_model=TokenResponse,
     summary="로그인 (JWT 발급)",
 )
+@limiter.limit("10/minute")          # 브루트포스 방어: IP당 1분에 10회 제한
 async def login(
+    request: Request,
     form: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession  = Depends(get_db),
 ) -> TokenResponse:
@@ -110,6 +131,8 @@ async def login(
     username: 아이디 또는 이메일
     password: 비밀번호
     """
+    client_ip = request.client.host if request.client else "unknown"
+
     # 아이디 또는 이메일로 유저 검색
     user = await db.scalar(
         select(User).where(
@@ -118,8 +141,14 @@ async def login(
         )
     )
 
-    # 존재하지 않거나 비밀번호 불일치 → 같은 에러 메시지 (보안)
+    # 존재하지 않거나 비밀번호 불일치 → 동일 에러 (사용자 열거 공격 방어)
     if not user or not verify_password(form.password, user.hashed_password):
+        # 실패 로그 (보안 감사용 — 개인정보 최소화)
+        logger.warning(
+            "Login failed: ip=%s identifier_hash=%s",
+            client_ip,
+            hash(form.username.lower()) & 0xFFFFFF,  # 식별자 해시만 기록
+        )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="아이디 또는 비밀번호가 올바르지 않습니다",
@@ -133,9 +162,15 @@ async def login(
             detail="정지된 계정입니다. 고객센터에 문의해주세요",
         )
 
-    # 마지막 로그인 시각 업데이트
-    user.last_login_at = datetime.now(tz=timezone.utc)
+    # 마지막 로그인 시각 업데이트 (atomic UPDATE — race condition 방어)
+    await db.execute(
+        update(User)
+        .where(User.id == user.id)
+        .values(last_login_at=datetime.now(tz=timezone.utc))
+    )
     await db.commit()
+
+    logger.info("Login success: user_id=%s ip=%s", user.id, client_ip)
 
     return TokenResponse(
         access_token=create_access_token(

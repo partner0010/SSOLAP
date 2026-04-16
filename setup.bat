@@ -1,100 +1,97 @@
 @echo off
-chcp 65001 >nul
-title SSOLAP 최초 설치
+title SSOLAP Setup (Run once)
 
 echo.
-echo  ╔══════════════════════════════════════════════════════╗
-echo  ║     SSOLAP 최초 설치 (처음 한 번만 실행하세요)        ║
-echo  ╚══════════════════════════════════════════════════════╝
+echo  +====================================================+
+echo  ^|   SSOLAP First-Time Setup  (run once only)        ^|
+echo  +====================================================+
 echo.
 
 set ROOT=%~dp0
 set API_DIR=%ROOT%api
 set WEB_DIR=%ROOT%web
 
-:: ── Python 확인 ──────────────────────────────────────────────────────────
+:: ── Check Python ────────────────────────────────────────────────────────────
 python --version >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [오류] Python이 설치되어 있지 않습니다.
-    echo        https://www.python.org/downloads/ 에서 설치 후 다시 실행하세요.
+    echo [ERROR] Python not found.
+    echo         Install from https://www.python.org/downloads/
     pause
     exit /b 1
 )
-echo [OK] Python 확인됨
+echo [OK] Python found:
 python --version
 
-:: ── Node.js 확인 ─────────────────────────────────────────────────────────
+:: ── Check Node.js ───────────────────────────────────────────────────────────
 node --version >nul 2>&1
 if %errorlevel% neq 0 (
-    echo [오류] Node.js가 설치되어 있지 않습니다.
-    echo        https://nodejs.org/ 에서 설치 후 다시 실행하세요.
+    echo [ERROR] Node.js not found.
+    echo         Install from https://nodejs.org/
     pause
     exit /b 1
 )
-echo [OK] Node.js 확인됨
+echo [OK] Node.js found:
 node --version
 
 echo.
-echo ─────────────────────────────────────────────
-echo  [STEP 1/4] Python 가상환경 생성 및 패키지 설치
-echo ─────────────────────────────────────────────
+echo ─────────────────────────────────────────────────────
+echo  STEP 1/4  Create Python virtual environment
+echo ─────────────────────────────────────────────────────
 cd /d %API_DIR%
 if not exist "venv" (
-    echo 가상환경 생성 중...
+    echo Creating venv...
     python -m venv venv
-    echo [OK] venv 생성 완료
+    echo [OK] venv created
 ) else (
-    echo [OK] venv 이미 존재함 — 건너뜀
+    echo [SKIP] venv already exists
 )
 
-echo 패키지 설치 중... (시간이 걸릴 수 있습니다)
-call venv\Scripts\activate.bat
-pip install -r requirements.txt
-echo [OK] API 패키지 설치 완료
+echo Installing Python packages...
+call venv\Scripts\activate.bat && pip install -r requirements.txt
+echo [OK] Python packages installed
 
 echo.
-echo ─────────────────────────────────────────────
-echo  [STEP 2/4] DB 마이그레이션
-echo ─────────────────────────────────────────────
+echo ─────────────────────────────────────────────────────
+echo  STEP 2/4  Run DB migrations
+echo ─────────────────────────────────────────────────────
 cd /d %API_DIR%
-call venv\Scripts\activate.bat
-alembic upgrade head
-echo [OK] DB 마이그레이션 완료
+call venv\Scripts\activate.bat && alembic upgrade head
+echo [OK] DB migration done
 
 echo.
-echo ─────────────────────────────────────────────
-echo  [STEP 3/4] Next.js 패키지 설치
-echo ─────────────────────────────────────────────
+echo ─────────────────────────────────────────────────────
+echo  STEP 3/4  Install Node.js packages
+echo ─────────────────────────────────────────────────────
 cd /d %WEB_DIR%
 if not exist "node_modules" (
-    echo npm install 중... (시간이 걸릴 수 있습니다)
+    echo Running npm install...
     npm install
 ) else (
-    echo [OK] node_modules 이미 존재함 — 건너뜀
+    echo [SKIP] node_modules already exists
 )
-echo [OK] 웹 패키지 설치 완료
+echo [OK] Node packages installed
 
 echo.
-echo ─────────────────────────────────────────────
-echo  [STEP 4/4] 환경변수 파일 확인
-echo ─────────────────────────────────────────────
+echo ─────────────────────────────────────────────────────
+echo  STEP 4/4  Create .env.local (web)
+echo ─────────────────────────────────────────────────────
 if not exist "%WEB_DIR%\.env.local" (
-    echo [생성] web\.env.local 파일 생성 중...
+    echo Creating web/.env.local ...
     (
         echo NEXT_PUBLIC_API_URL=http://localhost:8000
         echo NEXT_PUBLIC_WS_URL=ws://localhost:8000
         echo NEXT_PUBLIC_APP_NAME=SSOLAP
     ) > "%WEB_DIR%\.env.local"
-    echo [OK] web\.env.local 생성 완료
+    echo [OK] web/.env.local created
 ) else (
-    echo [OK] web\.env.local 이미 존재함
+    echo [SKIP] web/.env.local already exists
 )
 
 echo.
-echo ╔══════════════════════════════════════════════════════╗
-echo ║  ✅ 설치 완료!                                        ║
-echo ║                                                      ║
-echo ║  이제 start.bat 을 실행해 서비스를 시작하세요         ║
-echo ╚══════════════════════════════════════════════════════╝
+echo  +====================================================+
+echo  ^|  Setup complete!                                  ^|
+echo  ^|                                                   ^|
+echo  ^|  Run start.bat to launch all services             ^|
+echo  +====================================================+
 echo.
 pause

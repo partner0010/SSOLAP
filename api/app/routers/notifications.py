@@ -194,20 +194,25 @@ async def notification_ws(
       { "event": "notification", "data": { ...NotiResponse } }
       { "event": "unread_count", "data": { "count": 3 } }
     """
-    # JWT 인증
-    user: Optional[User] = None
-    if token:
-        try:
-            payload = decode_token(token)
-            if payload.get("type") == "access":
-                user = await db.scalar(
-                    select(User).where(User.id == int(payload["sub"]))
-                )
-        except (JWTError, Exception):
-            pass
+    # JWT 인증 — 토큰 없거나 유효하지 않으면 즉시 연결 거부
+    if not token:
+        await websocket.close(code=4001, reason="token required")
+        return
+
+    try:
+        payload = decode_token(token)
+        if payload.get("type") != "access":
+            await websocket.close(code=4001, reason="invalid token type")
+            return
+        user: Optional[User] = await db.scalar(
+            select(User).where(User.id == int(payload["sub"]))
+        )
+    except (JWTError, ValueError, KeyError):
+        await websocket.close(code=4001, reason="token invalid or expired")
+        return
 
     if not user or not user.is_active:
-        await websocket.close(code=4001, reason="인증 실패")
+        await websocket.close(code=4001, reason="user inactive")
         return
 
     await noti_manager.connect(websocket, user.id)

@@ -4,6 +4,7 @@ POST /upload/image   — 이미지 업로드 (jpg, png, webp, gif)
 POST /upload/video   — 영상 업로드 (mp4, webm, mov)
 POST /upload/avatar  — 프로필 사진 업로드 (이미지 전용, 최대 5MB)
 """
+import logging
 import os
 import uuid
 from pathlib import Path
@@ -15,7 +16,8 @@ from app.core.config import settings
 from app.models.user import User
 from app.routers.deps import get_current_user
 
-router = APIRouter(prefix="/upload", tags=["파일 업로드"])
+router  = APIRouter(prefix="/upload", tags=["파일 업로드"])
+logger  = logging.getLogger(__name__)
 
 # ─── 허용 타입 ─────────────────────────────────────────────────────────────────
 ALLOWED_IMAGE_TYPES = {
@@ -83,11 +85,13 @@ async def _save_file(
                 f.write(chunk)
     except HTTPException:
         raise
-    except Exception as e:
+    except Exception as exc:
         dest.unlink(missing_ok=True)
+        # 시스템 정보는 서버 로그에만 기록 (클라이언트에 노출 금지)
+        logger.error("File save failed: %s", exc, exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"파일 저장 실패: {str(e)}",
+            detail="파일 저장 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.",
         )
 
     url = f"/uploads/{subdir}/{filename}"
